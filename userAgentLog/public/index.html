@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Agent Distribution</title>
+    <!-- Tailwind CSS CDN for basic styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN for creating interactive charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+        /* Custom styles for the body and container, ensuring the "Inter" font is used */
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f0f4f8; /* Light gray background for a clean look */
+        }
+        /* Ensure the canvas is responsive within its container and maintains aspect ratio */
+        #user-agent-chart {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-4xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">User Agent Distribution</h1>
+
+        <!-- Container for the chart. Chart.js requires a defined height to render properly. -->
+        <div class="relative h-96">
+            <canvas id="user-agent-chart"></canvas>
+        </div>
+
+        <!-- Div for displaying error messages to the user -->
+        <div id="error-message" class="text-red-500 text-center mt-4 hidden">
+            <!-- Error messages will be displayed here dynamically by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // Variable to store the fetched user agent log response.
+        // Declared with 'let' so it can be reassigned after the fetch operation.
+        let userAgentLogResponse = {};
+
+        /**
+         * Renders a bar chart using Chart.js based on the provided data.
+         * This function handles the creation, updating, and destruction of the chart instance.
+         * @param {Object.<string, number>} data - An object where keys are labels (user agent names) and values are counts.
+         * @param {string} canvasId - The ID of the HTML canvas element where the chart should be drawn.
+         */
+        function renderChartJsBarChart(data, canvasId) {
+            const ctx = document.getElementById(canvasId);
+            const errorMessageDiv = document.getElementById('error-message');
+
+            // Check if the canvas element exists. If not, log an error and display a message.
+            if (!ctx) {
+                console.error(`Canvas element with ID '${canvasId}' not found.`);
+                errorMessageDiv.textContent = `Error: Canvas element with ID '${canvasId}' not found.`;
+                errorMessageDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Clear any previous error messages before attempting to render the chart.
+            errorMessageDiv.classList.add('hidden');
+
+            // Extract labels (user agent names) and counts from the provided data object.
+            const labels = Object.keys(data);
+            const counts = Object.values(data);
+
+            // If no data is available, hide the canvas and display a message.
+            if (labels.length === 0) {
+                ctx.style.display = 'none'; // Hide the canvas element
+                errorMessageDiv.textContent = 'No data to display for the chart.';
+                errorMessageDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Destroy any existing Chart.js instance on the canvas to prevent memory leaks
+            // and ensure a fresh chart is drawn if data updates or re-rendering occurs.
+            if (window.myUserAgentChart instanceof Chart) {
+                window.myUserAgentChart.destroy();
+            }
+
+            // Create a new Chart.js instance.
+            window.myUserAgentChart = new Chart(ctx, {
+                type: 'bar', // Specifies the chart type as a bar chart.
+                data: {
+                    labels: labels, // X-axis labels will be the user agent strings.
+                    datasets: [{
+                        label: 'Number of Occurrences', // Label for the dataset, shown in the legend and tooltip.
+                        data: counts, // Y-axis values, representing the count for each user agent.
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)', // Tailwind blue-500 with opacity for bars
+                            'rgba(16, 185, 129, 0.8)', // Tailwind emerald-500
+                            'rgba(245, 158, 11, 0.8)',  // Tailwind amber-500
+                            'rgba(139, 92, 246, 0.8)', // Tailwind violet-500
+                            'rgba(239, 68, 68, 0.8)'   // Tailwind red-500
+                            // More colors can be added here if there are more data points
+                        ],
+                        borderColor: [
+                            'rgba(59, 130, 246, 1)',
+                            'rgba(16, 185, 129, 1)',
+                            'rgba(245, 158, 11, 1)',
+                            'rgba(139, 92, 246, 1)',
+                            'rgba(239, 68, 68, 1)'
+                        ],
+                        borderWidth: 1, // Border width for the bars
+                        borderRadius: 5 // Apply rounded corners to the bars for a softer look
+                    }]
+                },
+                options: {
+                    responsive: true, // Makes the chart resize with the browser window.
+                    maintainAspectRatio: false, // Allows the chart's height to be controlled by its container's height.
+                    plugins: {
+                        legend: {
+                            display: true, // Display the legend (e.g., "Number of Occurrences").
+                            position: 'top', // Position the legend at the top of the chart.
+                            labels: {
+                                font: {
+                                    family: 'Inter' // Ensure legend labels use the "Inter" font.
+                                }
+                            }
+                        },
+                        title: {
+                            display: false, // The main title is handled by the H1 tag outside the chart.
+                        },
+                        tooltip: {
+                            callbacks: {
+                                // Custom callback for tooltip labels to display the count clearly.
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                    }
+                                    return label;
+                                }
+                            },
+                            bodyFont: {
+                                family: 'Inter' // Ensure tooltip body text uses the "Inter" font.
+                            },
+                            titleFont: {
+                                family: 'Inter' // Ensure tooltip title text uses the "Inter" font.
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            // X-axis (labels) configuration.
+                            grid: {
+                                display: false // Hide vertical grid lines for a cleaner look.
+                            },
+                            ticks: {
+                                color: '#4b5563', // Color for X-axis labels.
+                                font: {
+                                    family: 'Inter' // Ensure X-axis labels use the "Inter" font.
+                                }
+                            }
+                        },
+                        y: {
+                            // Y-axis (counts) configuration.
+                            beginAtZero: true, // Ensure the Y-axis starts at zero.
+                            grid: {
+                                color: '#e5e7eb' // Light gray horizontal grid lines.
+                            },
+                            ticks: {
+                                color: '#4b5563', // Color for Y-axis labels.
+                                font: {
+                                    family: 'Inter' // Ensure Y-axis labels use the "Inter" font.
+                                }
+                                // precision: 0 // Ensure Y-axis ticks are whole numbers (counts).
+                                // Note: Chart.js v4.x automatically handles integer ticks for 'bar' type if data is integer.
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Main execution block ---
+        // This code runs once the entire HTML document has been loaded and parsed.
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOMContentLoaded fired. Attempting to fetch user agent data...');
+
+            // Fetch data from the specified local endpoint.
+            fetch("http://localhost:5000/user/userlogs?token=123")
+                .then(async (raw) => {
+                    // Check if the HTTP response was successful (status code 200-299).
+                    if (!raw.ok) {
+                        throw new Error(`HTTP error! status: ${raw.status}`);
+                    }
+                    // Parse the JSON response body.
+                    const data = await raw.json();
+                    userAgentLogResponse = data; // Store the full response.
+                    console.log("Fetched data:", userAgentLogResponse);
+
+                    // Extract the 'UserAgentGraph' object from the response.
+                    const userAgentGraph = userAgentLogResponse.UserAgentGraph;
+                    if (userAgentGraph) {
+                        // If 'UserAgentGraph' exists, render the chart.
+                        renderChartJsBarChart(userAgentGraph, 'user-agent-chart');
+                    } else {
+                        // If 'UserAgentGraph' is missing, display an error message.
+                        const errorMessageDiv = document.getElementById('error-message');
+                        errorMessageDiv.textContent = "Error: 'UserAgentGraph' object not found in the response.";
+                        errorMessageDiv.classList.remove('hidden');
+                        console.error("Data structure error: 'UserAgentGraph' not found.");
+                    }
+                })
+                .catch((error) => {
+                    // Catch any errors that occur during the fetch operation (e.g., network issues, server errors).
+                    const errorMessageDiv = document.getElementById('error-message');
+                    errorMessageDiv.textContent = `Failed to fetch user agent data: ${error.message}. Please ensure your local server is running and accessible.`;
+                    errorMessageDiv.classList.remove('hidden');
+                    console.error("Fetch error:", error);
+                });
+        });
+    </script>
+</body>
+</html>
